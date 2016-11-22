@@ -3,6 +3,19 @@ import sys
 OPERATORS = ['&', '|', '=>', '~']
 
 
+class KB:
+    def __init__(self, sentence=None):
+        self.clauses = []
+        if sentence:
+            self.tell(sentence)
+
+    def tell(self, sentence):
+        self.clauses(convert_to_cnf(sentence))
+
+    def ask(self, query):
+        resolution(query)
+
+
 class Clause:
 
     def __init__(self, operator, arguments=[]):
@@ -51,6 +64,13 @@ class Clause:
 
     def __eq__(self, other):
         return isinstance(other, Clause) and self.operator == other.operator and self.arguments == other.arguments
+
+
+def isPredicate(expr):
+    if expr.op[0] != '~':
+        return expr.op not in OPERATORS and expr.op[0].isupper()
+    else:
+        return expr.op not in OPERATORS and expr.op[1].isupper()
 
 
 def makeClause(line):
@@ -183,6 +203,14 @@ def move_neg_in(rule):
 op_table = {'&': True, '|': False}
 
 
+def conjuncts(sentence):
+    return dissociate('&', [sentence])
+
+
+def disjuncts(sentence):
+    return dissociate('|', [sentence])
+
+
 def associate(op, args):
     args = dissociate(op, args)
     if len(args) == 0:
@@ -195,6 +223,7 @@ def associate(op, args):
 
 def dissociate(op, args):
     result = []
+
     def collect(subargs):
         for arg in subargs:
             if arg.operator == op:
@@ -230,6 +259,55 @@ def distribute_and_over_or(rule):
     else:
         return rule
 
+
+def resolution(KB,query):
+    clauses = KB.clause + conjuncts(convert_to_cnf(~query))
+    new = set()
+    while True:
+        n = len(clauses)
+        print 'n', n
+        pairs = [(clauses[i], clauses[j]) for i in range(n) for j in range(i + 1, n)]
+        print 'pairs', len(pairs)
+        pairs_count = 0
+
+        for (ci, cj) in pairs:
+            pairs_count += 1
+            if pairs_count % 100000 == 0:
+                print 'pairs count', pairs_count
+            resolvents = resolve(ci, cj)
+            if False in resolvents:
+                return True
+            new = new.union(set(resolvents))
+        if new.issubset(set(clauses)):
+            return False
+        print 'new :', len(new)
+        for c in new:
+            if c not in clauses:
+                clauses.append(c)
+
+
+def resolve(ci, cj):
+    clauses = []
+    for di in disjuncts(ci):
+        for dj in disjuncts(cj):
+            if di == ~dj or ~di == dj:
+                dnew = unique(removeall(di, disjuncts(ci)) + removeall(dj, disjuncts(cj)))
+                clauses.append(associate('|', dnew))
+    return clauses
+
+
+def unique(sequence):
+    #remove dup
+    return list(set(sequence))
+
+
+def removeall(ele, sequence):
+    #return copy of list removed all appeared
+    if isinstance(sequence, str):
+        return sequence.replace(ele, '')
+    else:
+        return [x for x in sequence if x != ele]
+
 '''read input file'''
 
 
@@ -253,16 +331,25 @@ for i in range(sentencenum):
     sentencelist.append(sentenceline)
 
 inputfile.close()
-
+queries = []
 rules = []
 for q in querylist:
     query = makeClause(parse(q))
-    print query
-    print '>>>>>>querys clause op, argu', query.operator, query.arguments
+    queries.append(query)
+    # print query
+    # print '>>>>>>querys clause op, argu', query.operator, query.arguments
     # print parse(q)
 for sentence in sentencelist:
     # print parse(sentence)
     rule = makeClause(parse(sentence))
     # print '>>>rule op, argu',rule, rule.operator, rule.arguments
-    rules.append(convert_to_cnf(rule))
-print ">>>",rules
+    # rules.append(convert_to_cnf(rule))
+    KB.tell(rule)
+# print ">>>", rules
+
+
+for query in queries:
+    KB.ask(query)
+    
+outputFile = open('output.txt','w')
+outputFile.close()
